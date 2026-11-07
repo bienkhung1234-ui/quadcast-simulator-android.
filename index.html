@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0d">
+<title>Studio Mic Sim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: sticky header + tabs, one scrolling panel, fixed control dock at the bottom.
+   Look: matte black studio hardware, one red LED accent. */
+:root{
+  --bg:#0a0a0c; --panel:#131316; --panel2:#1a1a1f; --line:#2a2a31; --fg:#efeeec; --mute:#8d8d96;
+  --red:#ff2d41; --red-dim:#5a1620; --ok:#3fd6a0; --warn:#ffb020;
+  --disp:'Chakra Petch','Rajdhani',system-ui,sans-serif; --body:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--body)}
+body{padding:0 max(14px,env(safe-area-inset-left)) calc(150px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-right));max-width:980px;margin:auto}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:calc(12px + env(safe-area-inset-top)) 0 8px}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;min-width:0}
+.brand b{font:700 18px var(--disp);letter-spacing:.14em}
+.brand small{color:var(--mute);font-size:11px}
+.pill{font:500 11px var(--mono);letter-spacing:.08em;padding:4px 10px;border:1px solid var(--line);border-radius:99px;color:var(--mute);white-space:nowrap}
+.pill.live{color:var(--red);border-color:var(--red-dim);box-shadow:0 0 12px #ff2d4133}
+.tabs{display:flex;gap:4px;position:sticky;top:0;z-index:5;background:var(--bg);padding:6px 0 10px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tabs button{flex:1;background:none;border:0;border-bottom:2px solid transparent;padding:10px 4px;font:600 12px var(--disp);letter-spacing:.14em;color:var(--mute)}
+.tabs button[aria-selected=true]{color:var(--fg);border-color:var(--red)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.stack{display:grid;gap:12px}
+h2{font:600 11px var(--disp);letter-spacing:.18em;color:var(--mute);margin:0 0 10px;text-transform:uppercase}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:7px 11px;font:500 12px var(--mono);color:var(--fg)}
+.chip[aria-pressed=true]{border-color:var(--red);color:var(--red);background:#2a0f15}
+.chip:active{transform:translateY(1px)}
+/* mic hero */
+.hero{display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr);gap:18px;align-items:center}
+@media(max-width:620px){.hero{grid-template-columns:1fr}}
+.mic{width:100%;max-width:250px;margin:auto;display:block;overflow:visible}
+.led{transition:opacity .2s}
+.mic .glow{filter:drop-shadow(0 0 var(--g,6px) var(--c,#ff2d41))}
+.knob{cursor:ns-resize;touch-action:none}
+.readout{font:700 44px/1 var(--disp);letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.readout small{font-size:18px;color:var(--mute);margin-left:4px}
+.sub{color:var(--mute);font-size:12px;font-family:var(--mono)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(90deg,var(--red) var(--v,0%),#2d2d34 var(--v,0%))}
+input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:#2d2d34}
+input[type=range]::-moz-range-progress{height:4px;border-radius:2px;background:var(--red)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#e9e8e6;border:3px solid var(--bg);box-shadow:0 0 0 1px var(--line);margin-top:-8px}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#e9e8e6;border:3px solid var(--bg)}
+.warn{border-color:#5a4210;background:#1d1608}
+.warn label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.warn input{margin-top:3px;width:18px;height:18px;accent-color:var(--red)}
+.flash{animation:fl .5s 2}
+@keyframes fl{50%{background:#3a1d08}}
+/* presets */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.pre{display:flex;flex-direction:column;gap:6px;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
+.pre[aria-pressed=true]{border-color:var(--red);background:#1f0d12;box-shadow:inset 0 0 0 1px var(--red-dim)}
+.pre b{font:600 14px var(--disp);letter-spacing:.04em;overflow-wrap:anywhere}
+.pre p{margin:0;color:var(--mute);font-size:12px}
+.tags{display:flex;gap:5px;flex-wrap:wrap}
+.tag{font:500 10px var(--mono);padding:2px 6px;border-radius:4px;background:var(--panel2);color:var(--mute)}
+.tag.r{color:#ff8592;background:#2a1217}
+/* fx */
+.fx{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.fxh{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.sw{width:46px;height:26px;border-radius:13px;background:#2a2a31;border:1px solid var(--line);position:relative;flex:none;transition:.15s}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#8d8d96;transition:.15s}
+.sw[aria-pressed=true]{background:#3a121a;border-color:var(--red)}
+.sw[aria-pressed=true]::after{left:22px;background:var(--red);box-shadow:0 0 10px var(--red)}
+.fxh b{font:600 14px var(--disp);letter-spacing:.05em;display:block}
+.fxh span{font:400 11px var(--mono);color:var(--mute)}
+.ctl{display:grid;grid-template-columns:96px minmax(0,1fr) 64px;gap:8px;align-items:center;font-size:12px}
+.ctl span:first-child{color:var(--mute)}
+.ctl output{font:500 12px var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.off .ctl{opacity:.45}
+.tone{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+/* eq */
+#eqc{width:100%;height:190px;display:block;background:#0e0e11;border:1px solid var(--line);border-radius:8px}
+.flt{display:grid;grid-template-columns:44px 64px 1fr 1fr 1fr 34px;gap:6px;align-items:center;margin-top:6px}
+.flt input,.flt select,textarea{width:100%;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:6px;color:var(--fg);padding:7px 6px;font:12px var(--mono)}
+.flt .x{background:none;border:1px solid var(--line);border-radius:6px;color:var(--mute);height:32px}
+textarea{min-height:130px;resize:vertical;white-space:pre;overflow:auto}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font:600 12px var(--disp);letter-spacing:.1em}
+.btn.red{background:var(--red);border-color:var(--red);color:#fff}
+/* dock */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:9;background:linear-gradient(#0a0a0c00,#0a0a0c 22%);padding:18px max(14px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+.dockin{max-width:980px;margin:auto;background:#121215;border:1px solid var(--line);border-radius:12px;padding:10px;display:grid;gap:8px}
+.dr{display:flex;gap:8px;align-items:center}
+.go{flex:1;background:var(--red);border:0;border-radius:8px;padding:12px;font:700 14px var(--disp);letter-spacing:.14em;color:#fff}
+.go.on{background:#2a2a31;color:var(--fg)}
+.sq{width:46px;height:44px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);font:600 11px var(--mono)}
+.sq[aria-pressed=true]{border-color:var(--red);color:var(--red)}
+.meter{display:grid;grid-template-columns:30px 1fr 52px;gap:8px;align-items:center;font:500 10px var(--mono);color:var(--mute)}
+.bar{height:7px;background:#25252b;border-radius:4px;position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,#3fd6a0 0,#3fd6a0 70%,#ffb020 82%,#ff2d41 100%);background-size:var(--bw,100%) 100%}
+.mvol{display:grid;grid-template-columns:44px 1fr 38px;gap:8px;align-items:center;font:500 10px var(--mono);color:var(--mute)}
+.toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translate(-50%,-140%);background:#201014;border:1px solid var(--red);padding:10px 14px;border-radius:8px;z-index:20;max-width:92vw;transition:.25s;font-size:13px}
+.toast.show{transform:translate(-50%,0)}
+[hidden]{display:none!important}
+.note{color:var(--mute);font-size:12px}
+a.dl{color:var(--ok)}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>STUDIO MIC SIM</b><small>mô phỏng micro kiểu QuadCast · logic Equalizer APO</small></div>
+  <div id="stat" class="pill">OFFLINE</div>
+</header>
+<nav class="tabs" id="tabs" role="tablist">
+  <button role="tab" data-tab="mic" aria-selected="true">MIC</button>
+  <button role="tab" data-tab="pre" aria-selected="false">PRESET</button>
+  <button role="tab" data-tab="fx" aria-selected="false">HIỆU ỨNG</button>
+  <button role="tab" data-tab="eq" aria-selected="false">EQ · APO</button>
+</nav>
+
+<main>
+<!-- MIC -->
+<section id="t-mic" class="stack">
+  <div class="card hero">
+    <svg class="mic" viewBox="0 0 220 360" role="img" aria-label="Micro mô phỏng">
+      <defs>
+        <linearGradient id="body" x1="0" x2="1"><stop offset="0" stop-color="#16161a"/><stop offset=".45" stop-color="#2a2a31"/><stop offset="1" stop-color="#101013"/></linearGradient>
+        <pattern id="mesh" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r="1.1" fill="#07070a"/></pattern>
+        <linearGradient id="metal" x1="0" x2="1"><stop offset="0" stop-color="#2b2b31"/><stop offset=".5" stop-color="#4a4a53"/><stop offset="1" stop-color="#222227"/></linearGradient>
+      </defs>
+      <!-- shock mount arms -->
+      <path d="M22 70 Q10 190 52 270 L70 270" fill="none" stroke="#33333a" stroke-width="7" stroke-linecap="round"/>
+      <path d="M198 70 Q210 190 168 270 L150 270" fill="none" stroke="#33333a" stroke-width="7" stroke-linecap="round"/>
+      <!-- capsule -->
+      <rect x="44" y="18" width="132" height="236" rx="66" fill="url(#body)" stroke="#3b3b43"/>
+      <rect x="52" y="26" width="116" height="220" rx="58" fill="url(#mesh)"/>
+      <rect id="ledring" class="glow led" x="44" y="18" width="132" height="236" rx="66" fill="none" stroke="#ff2d41" stroke-width="3"/>
+      <!-- touch sensor -->
+      <g id="touch" style="cursor:pointer"><circle id="tdot" class="glow" cx="110" cy="52" r="11" fill="#ff2d41"/><circle cx="110" cy="52" r="17" fill="none" stroke="#3b3b43"/></g>
+      <rect x="64" y="262" width="92" height="22" rx="6" fill="url(#metal)"/>
+      <!-- knob -->
+      <g class="knob" id="knob"><circle cx="110" cy="312" r="26" fill="#1b1b20" stroke="#3b3b43" stroke-width="2"/><g id="kn" transform="rotate(-135 110 312)"><rect x="107.5" y="288" width="5" height="12" rx="2" fill="#ff2d41"/></g><circle cx="110" cy="312" r="16" fill="#0f0f12" stroke="#2a2a31"/></g>
+      <text x="110" y="352" text-anchor="middle" fill="#6b6b74" font-family="IBM Plex Mono,monospace" font-size="9" letter-spacing="2">GAIN</text>
+    </svg>
+    <div class="stack">
+      <div><h2>Mic gain</h2>
+        <div class="readout"><span id="gv">1.00</span><small>×</small></div>
+        <div class="sub" id="gdb">0.0 dB</div></div>
+      <input id="gain" type="range" min="0" max="1000" value="82" aria-label="Mic gain 0 đến 150 lần">
+      <div class="row" id="gchips"></div>
+      <div><h2>Đèn LED</h2><div class="row" id="leds"></div></div>
+    </div>
+  </div>
+  <div class="card"><h2>Bật nhanh</h2><div class="row" id="quick"></div></div>
+  <div class="card warn" id="safe">
+    <label><input type="checkbox" id="hp"><span><b>Tôi đang đeo tai nghe có dây.</b><br><span class="note">Không nghe qua loa ngoài: sẽ bị hú. Gain cao và preset “loud” rất to, đã có limiter nhưng hãy để âm lượng monitor thấp rồi tăng dần.</span></span></label>
+  </div>
+  <div class="card" id="devbox" hidden><h2>Thiết bị micro</h2><select id="dev" class="chip" style="width:100%"></select></div>
+  <div class="card" id="recbox" hidden><h2>Bản ghi</h2><div id="reclist" class="stack"></div></div>
+</section>
+
+<!-- PRESETS -->
+<section id="t-pre" hidden class="stack">
+  <p class="note" style="margin:0">Mỗi preset được dựng lại từ file config Equalizer APO của bạn. Plugin VST (.dll) không chạy được trên web nên được thay bằng bộ xử lý tương đương gần đúng. Dòng bắt đầu bằng # trong file gốc được coi là đã tắt.</p>
+  <h2 style="margin-top:6px">Config APO của bạn</h2>
+  <div class="grid" id="g-apo"></div>
+  <h2 style="margin-top:10px">Studio Voice (từ script v4vang)</h2>
+  <div class="grid" id="g-hook"></div>
+</section>
+
+<!-- FX -->
+<section id="t-fx" hidden><div class="fx" id="fxlist"></div></section>
+
+<!-- EQ -->
+<section id="t-eq" hidden class="stack">
+  <div class="card"><h2>Đường cong EQ tổng (filter + tone)</h2><canvas id="eqc" width="900" height="380"></canvas>
+    <div class="ctl" style="margin-top:12px;grid-template-columns:96px minmax(0,1fr) 64px"><span>Preamp</span><input id="pre" type="range" min="-30" max="40" step="0.5" value="0"><output id="prev">0 dB</output></div>
+    <p class="note" style="margin:6px 0 0">Preamp giới hạn −30…+40 dB để bảo vệ tai. Config nào đặt cao hơn sẽ bị cắt về mức này.</p></div>
+  <div class="card"><h2>Bộ lọc</h2><div id="flts"></div>
+    <div class="row" style="margin-top:10px"><button class="btn" id="addf">+ THÊM FILTER</button><button class="btn" id="clrf">XÓA HẾT</button></div></div>
+  <div class="card"><h2>Nhập / xuất config APO</h2>
+    <p class="note" style="margin-top:0">Dán nội dung file config.txt hoặc chọn file. Hỗ trợ Preamp, Filter (PK LS HS LSC HSC LP HP LPQ HPQ BP NO AP), Delay và nhận diện các plugin VST phổ biến.</p>
+    <textarea id="apo" spellcheck="false" placeholder="Preamp: -3 dB&#10;Filter 1: ON PK Fc 120 Hz Gain 4 dB Q 1"></textarea>
+    <div class="row" style="margin-top:10px"><input type="file" id="file" accept=".txt,text/plain" hidden><button class="btn" id="pick">CHỌN FILE .TXT</button><button class="btn red" id="imp">ÁP DỤNG</button><button class="btn" id="exp">XUẤT CONFIG HIỆN TẠI</button></div>
+    <div id="impout" class="note" style="margin-top:10px"></div></div>
+</section>
+</main>
+
+<div class="dock"><div class="dockin">
+  <div class="dr"><button class="go" id="go">BẮT ĐẦU</button><button class="sq" id="mute" aria-pressed="false" title="Tắt tiếng monitor">MUTE</button><button class="sq" id="rec" aria-pressed="false" title="Ghi âm">REC</button></div>
+  <div class="mvol"><span>MON</span><input id="mon" type="range" min="0" max="100" value="22" aria-label="Âm lượng monitor"><output id="monv">22%</output></div>
+  <div class="meter"><span>IN</span><div class="bar"><i id="mi"></i></div><span id="mit">-∞</span></div>
+  <div class="meter"><span>OUT</span><div class="bar"><i id="mo"></i></div><span id="mot">-∞</span></div>
+</div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const dB=x=>Math.pow(10,x/20), toDb=x=>20*Math.log10(x+1e-9);
+const h=(t,a={},...k)=>{const e=document.createElement(t);for(const[x,v]of Object.entries(a)){if(x==='class')e.className=v;else if(x.startsWith('on'))e.addEventListener(x.slice(2),v);else e.setAttribute(x,v)}k.flat().forEach(c=>e.append(c));return e};
+let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),4200)}
+
+/* ================= data ================= */
+const FX={
+ gate:{n:'Noise Gate / Expander',s:'ATK Expander · GGate',p:{thr:['Ngưỡng',-80,0,1,' dB',-50],floor:['Mức hạ',-80,0,1,' dB',-60],rel:['Release',20,800,10,' ms',150]}},
+ ncut:{n:'Noise Cut (lite)',s:'thay cho RNNoise',p:{hp:['Cắt trầm',20,400,1,' Hz',90],lp:['Cắt cao',2000,20000,100,' Hz',14000]}},
+ tone:{n:'Vocal Tone',s:'kiểu basiQ',p:{amt:['Độ mạnh',0,200,5,'%',100]}},
+ comp:{n:'Compressor',s:'Vocal King · reacomp',p:{thr:['Ngưỡng',-60,0,1,' dB',-24],ratio:['Ratio',1,20,0.5,':1',4],att:['Attack',1,100,1,' ms',8],rel:['Release',20,1000,10,' ms',150],mk:['Makeup',0,24,0.5,' dB',0]}},
+ drive:{n:'Drive',s:'saturation',p:{amt:['Mức',0,100,1,'',30]}},
+ crush:{n:'Crush',s:'bit crusher nhẹ',p:{amt:['Mức',0,100,1,'',20]}},
+ haas:{n:'Haas / Stereo Delay',s:'QuickHaas · Delay (âm = trễ trái)',p:{ms:['Độ trễ',-40,40,0.1,' ms',12]}},
+ wider:{n:'Stereo Wider',s:'Wider.dll',p:{w:['Độ rộng',0,300,5,'%',150]}},
+ pan:{n:'Pan',s:'Psypan',p:{pan:['Vị trí',-100,100,1,'',0]}},
+ echo:{n:'Echo',s:'GDelay',p:{t:['Thời gian',20,800,5,' ms',220],fb:['Feedback',0,90,1,'%',30],mix:['Mix',0,100,1,'%',25]}},
+ reverb:{n:'Reverb',s:'Blackhole · DReverb · TAL · CRTIV',p:{mix:['Mix',0,100,1,'%',25],dec:['Decay',0.2,8,0.1,' s',1.8],pre:['Pre-delay',0,120,1,' ms',12],damp:['Damping',1000,20000,100,' Hz',7000],lc:['Low cut',20,800,10,' Hz',150]}}
+};
+const TONES={
+ off:[],
+ default:[['LS',100,1.5,.7],['HS',8000,2,.7]],
+ crystal:[['LS',120,-1,.7],['PK',3500,2.5,1],['HS',9000,4,.7]],
+ nice:[['HP',70,0,.7],['PK',200,-1.5,1],['PK',3000,3,.9],['HS',10000,2.5,.7]],
+ open:[['PK',300,-2,.8],['PK',5000,2,.8],['HS',12000,3,.7]],
+ bass:[['LS',150,4,.7],['PK',400,-1,1]],
+ kick:[['LS',90,5,.7],['PK',2500,1.5,1]],
+ sweet:[['LS',200,2,.7],['PK',3000,2,1],['HS',11000,2,.7]]
+};
+TONES['nice+crystal']=[...TONES.nice,...TONES.crystal];
+const TONE_LABEL={off:'Tắt',default:'Default',crystal:'Crystal',nice:'Nice Vocal','nice+crystal':'Nice+Crystal',open:'Open Mix',bass:'Bass OK',kick:'Kick It',sweet:'Sweet Vocal'};
+const F=(t,f,g,q=0.707)=>({t,f,g,q,on:true});
+
+const APO=[
+ {id:'bin',name:'BinChillz · Main chỉnh',note:'Preamp 30 + High shelf 29 Hz +27 dB + Preamp 50 + QuickHaas. Gain khổng lồ, bị giới hạn 40 dB.',pre:80,eq:[F('HS',29,27)],fx:{haas:{ms:19}},loud:1},
+ {id:'ice',name:'EQ Ice · Icy · Sơn · China',note:'Preamp 20, shelf cao, khoét 500 Hz, basiQ Crystal.',pre:20,tone:'crystal',eq:[F('HS',659.22,2),F('HS',20000,2),F('PK',528.48,-2.7,1.41),F('PK',500.07,-2.3,33.3333)]},
+ {id:'eqvang',name:'EQ Vàng',note:'8 filter vocal ấm, basiQ Crystal. Expander gốc đang bị # tắt.',pre:0,tone:'crystal',eq:[F('HS',80,-2,.7),F('PK',120,5,1),F('PK',250,5,1.2),F('PK',500,-2,1.2),F('PK',3000,4,1),F('PK',6000,-2,2),F('PK',8000,-3,2),F('PK',10000,2,.7)]},
+ {id:'leo',name:'Leo Top 2',note:'basiQ +10 dB. FabFilter Pro-Q và MathAudio không đọc được nên bỏ qua.',pre:10},
+ {id:'micam',name:'Mic ấm',note:'Preamp 15.6, basiQ Nice Vocal.',pre:15.6,tone:'nice'},
+ {id:'miceboy',name:'Miceboy',note:'ATK Expander nhẹ + basiQ Default.',tone:'default',fx:{gate:{thr:-44.6,floor:-7,rel:150}}},
+ {id:'mixden',name:'MixDen · Main Loudmic',note:'Chỉ GGate đang bật, các Include khác đã bị # tắt.',fx:{gate:{thr:-44.3,floor:-60,rel:250}}},
+ {id:'revm',name:'Reverb Method',note:'Dùng quanh 15–20 dB. Blackhole reverb lớn + QuickHaas.',pre:20,fx:{haas:{ms:-19},reverb:{mix:55,dec:3,pre:6,damp:12000,lc:120}}},
+ {id:'revvip',name:'Reverb VIP · Pro siêu pan',note:'DReverb ×2 + ReverbSolo + TAL, tối trầm.',fx:{reverb:{mix:30,dec:2.5,pre:0,damp:4000,lc:200}}},
+ {id:'rev',name:'REVERB',note:'Preamp 16, Nice Vocal + Crystal, Wider, Haas −1.8 ms.',pre:16,tone:'nice+crystal',fx:{wider:{w:120},haas:{ms:-1.8},reverb:{mix:28,dec:1.6,pre:8,damp:6000,lc:120}}},
+ {id:'vmem',name:'Vang mềm dùng',note:'Preamp 20+20, Open Mix, expander, Vocal King, Wider, reverb phòng.',pre:40,tone:'open',fx:{gate:{thr:-17.4,floor:-60,rel:120},comp:{},wider:{w:140},haas:{ms:6.6},reverb:{mix:13,dec:1.2,pre:10,damp:8000,lc:150}}},
+ {id:'van',name:'Vang ấn lệ lạnh',note:'Hai TAL Reverb 4 chồng nhau, đuôi dài.',fx:{reverb:{mix:55,dec:3.8,pre:20,damp:5000,lc:150}}},
+ {id:'vang',name:'Vang',note:'Blackhole Reverb mix 31.',fx:{reverb:{mix:31,dec:1.8,pre:0,damp:9000,lc:100}}},
+ {id:'yk1',name:'yKen · Talking Set v2',note:'Preamp 10.5, HP 75.9 Hz, LP 11.6 kHz, RNNoise, Nice Vocal.',pre:10.5,tone:'nice',eq:[F('LP',11572.2,0,2.9844),F('HP',75.86,0,1.8401)],fx:{ncut:{hp:76,lp:16000}}},
+ {id:'yk2',name:'yKenn · Loud',note:'Preamp 20, 2 peak, Nice Vocal, Wider, reverb nhỏ, Haas 2.1 ms.',pre:20,tone:'nice',eq:[F('PK',668.39,1.7,2.0647),F('PK',2606.33,3.5,2.6113)],fx:{ncut:{hp:80,lp:16000},wider:{w:110},haas:{ms:2.1},reverb:{mix:14,dec:1.1,pre:4,damp:6000,lc:150}}}
+];
+const HOOKS=[['TẮT',0,0,0,0],['CLEAN',60,0,0,10],['KILLER',75,30,10,15],['DIỆT',85,20,8,10],['HOOK',90,50,20,20],['GOD',95,70,30,25],['LORD',100,85,40,30],['ĐỂU',100,100,50,40]]
+ .map(([n,g,d,c,r])=>({id:'hk'+n,name:n,hook:1,loud:g>=85,gain:+(Math.pow(g/100,1.8)*150).toFixed(1),
+   note:`Gain gốc ${g} → ${(Math.pow(g/100,1.8)*150).toFixed(0)}×, drive ${d}, crush ${c}, reverb ${r}.`+(g===0?' Mute hoàn toàn như bản gốc.':''),
+   fx:Object.assign({},d?{drive:{amt:d}}:{},c?{crush:{amt:c}}:{},r?{reverb:{mix:r,dec:.5,pre:5,damp:5000,lc:150}}:{})}));
+
+/* ================= state ================= */
+let S={preamp:0,gain:1,mon:.22,eq:[],fx:{},tone:'off',led:'rgb',preset:null};
+const defFx=()=>{const o={};for(const[k,d]of Object.entries(FX)){o[k]={on:false};for(const[p,a]of Object.entries(d.p))o[k][p]=a[5]}return o};
+S.fx=defFx();
+function applyPreset(p){
+  S.fx=defFx();S.preamp=p.pre||0;S.eq=(p.eq||[]).map(x=>({...x}));S.tone=p.tone||'off';S.gain=p.gain??1;S.preset=p.id||null;
+  for(const[k,v]of Object.entries(p.fx||{}))Object.assign(S.fx[k],{on:true},v);
+  if(S.tone!=='off')S.fx.tone.on=true;
+  if(p.id==='hkTẮT')S.gain=0;
+  if(S.preamp>40)toast(`Preamp ${S.preamp} dB bị cắt về 40 dB để bảo vệ tai.`);
+  syncUI();applyAudio();
+}
+const gainToPos=x=>Math.round(Math.sqrt(clamp(x,0,150)/150)*1000), posToGain=p=>150*Math.pow(p/1000,2);
+
+/* ================= audio engine ================= */
+const A={ctx:null,n:null,stream:null,muted:false,sig:'',eqSig:'',toneSig:'',irSig:'',curve:{}};
+const ORDER=['gate','trim','ncut','eq','tone','comp','drive','crush','haas','wider','pan','echo','reverb','master'];
+const isActive=k=>k==='trim'||k==='master'||k==='eq'?true:k==='tone'?(S.fx.tone.on&&S.tone!=='off'):S.fx[k].on;
+
+function G(c,v=1){const g=c.createGain();g.gain.value=v;return g}
+function build(){
+  const c=A.ctx,n=A.n={st:{}};
+  n.src=c.createMediaStreamSource(A.stream);
+  n.up=G(c);n.up.channelCount=2;n.up.channelCountMode='explicit';n.up.channelInterpretation='speakers';
+  n.src.connect(n.up);
+  n.inAn=c.createAnalyser();n.inAn.fftSize=1024;
+  for(const k of ORDER)n.st[k]={i:G(c),o:G(c)};
+  const st=n.st;
+  n.gDly=c.createDelay(.1);n.gG=G(c);st.gate.i.connect(n.gDly);n.gDly.connect(n.gG);n.gG.connect(st.gate.o);
+  n.trim=G(c);st.trim.i.connect(n.trim);n.trim.connect(st.trim.o);
+  n.hp=c.createBiquadFilter();n.hp.type='highpass';n.lp=c.createBiquadFilter();n.lp.type='lowpass';
+  st.ncut.i.connect(n.hp);n.hp.connect(n.lp);n.lp.connect(st.ncut.o);
+  st.eq.i.connect(st.eq.o);st.tone.i.connect(st.tone.o);n.eqF=[];n.toneF=[];
+  n.comp=c.createDynamicsCompressor();n.comp.knee.value=6;n.mk=G(c);st.comp.i.connect(n.comp);n.comp.connect(n.mk);n.mk.connect(st.comp.o);
+  n.drv=c.createWaveShaper();n.drv.oversample='2x';st.drive.i.connect(n.drv);n.drv.connect(st.drive.o);
+  n.cr=c.createWaveShaper();st.crush.i.connect(n.cr);n.cr.connect(st.crush.o);
+  n.hs=c.createChannelSplitter(2);n.hm=c.createChannelMerger(2);n.hdL=c.createDelay(.1);n.hdR=c.createDelay(.1);
+  st.haas.i.connect(n.hs);n.hs.connect(n.hdL,0);n.hs.connect(n.hdR,1);n.hdL.connect(n.hm,0,0);n.hdR.connect(n.hm,0,1);n.hm.connect(st.haas.o);
+  n.ws=c.createChannelSplitter(2);n.wm=c.createChannelMerger(2);
+  const mL=G(c,.5),mR=G(c,.5),sL=G(c,.5),sR=G(c,-.5),mid=G(c),sNeg=G(c,-1);n.wS=G(c);
+  st.wider.i.connect(n.ws);n.ws.connect(mL,0);n.ws.connect(mR,1);n.ws.connect(sL,0);n.ws.connect(sR,1);
+  mL.connect(mid);mR.connect(mid);sL.connect(n.wS);sR.connect(n.wS);
+  mid.connect(n.wm,0,0);n.wS.connect(n.wm,0,0);mid.connect(n.wm,0,1);n.wS.connect(sNeg);sNeg.connect(n.wm,0,1);n.wm.connect(st.wider.o);
+  n.pan=c.createStereoPanner();st.pan.i.connect(n.pan);n.pan.connect(st.pan.o);
+  n.eDry=G(c);n.eDl=c.createDelay(1);n.eFb=G(c,.3);n.eW=G(c,.25);
+  st.echo.i.connect(n.eDry);n.eDry.connect(st.echo.o);st.echo.i.connect(n.eDl);n.eDl.connect(n.eW);n.eW.connect(st.echo.o);n.eDl.connect(n.eFb);n.eFb.connect(n.eDl);
+  n.rDry=G(c);n.rPre=c.createDelay(.3);n.rConv=c.createConvolver();n.rHP=c.createBiquadFilter();n.rHP.type='highpass';n.rLP=c.createBiquadFilter();n.rLP.type='lowpass';n.rWet=G(c);
+  st.reverb.i.connect(n.rDry);n.rDry.connect(st.reverb.o);st.reverb.i.connect(n.rPre);n.rPre.connect(n.rConv);n.rConv.connect(n.rHP);n.rHP.connect(n.rLP);n.rLP.connect(n.rWet);n.rWet.connect(st.reverb.o);
+  n.mas=G(c,0);st.master.i.connect(n.mas);n.mas.connect(st.master.o);
+  // safety limiter: compressor + hard clip
+  n.lim=c.createDynamicsCompressor();n.lim.threshold.value=-3;n.lim.knee.value=0;n.lim.ratio.value=20;n.lim.attack.value=.001;n.lim.release.value=.08;
+  n.clip=c.createWaveShaper();n.clip.curve=new Float32Array([-.98,0,.98]);
+  n.mon=G(c,0);n.outAn=c.createAnalyser();n.outAn.fftSize=1024;
+  n.rec=c.createMediaStreamDestination();
+  n.lim.connect(n.clip);n.clip.connect(n.outAn);n.clip.connect(n.mon);n.clip.connect(n.rec);n.mon.connect(c.destination);
+  A.sig='';A.eqSig='';A.toneSig='';A.irSig='';A.curve={};
+  rewire();applyAudio();
+}
+function rewire(){
+  const n=A.n,st=n.st;n.up.disconnect();n.up.connect(n.inAn);
+  for(const k of ORDER)st[k].o.disconnect();
+  let prev=n.up;for(const k of ORDER){if(!isActive(k))continue;prev.connect(st[k].i);prev=st[k].o}
+  prev.connect(n.lim);
+}
+const BT={PK:'peaking',LS:'lowshelf',HS:'highshelf',LP:'lowpass',HP:'highpass',BP:'bandpass',NO:'notch',AP:'allpass'};
+function setBq(b,f){
+  const c=A.ctx,t=c.currentTime;b.type=BT[f.t];b.frequency.value=clamp(f.f,10,c.sampleRate/2-100);
+  const q=Math.max(.05,f.q||.707);
+  b.Q.value=(f.t==='LP'||f.t==='HP')?toDb(q):q;
+  b.gain.value=(f.t==='PK'||f.t==='LS'||f.t==='HS')?clamp(f.g,-30,30):0;
+}
+function syncFilters(stage,key,list,holder){
+  const c=A.ctx,n=A.n,s=n.st[stage];
+  const sig=key+'|'+list.map(f=>f.t).join();
+  if(A[holder+'Sig']!==sig){
+    s.i.disconnect();n[holder].forEach(b=>b.disconnect());
+    n[holder]=list.map(()=>c.createBiquadFilter());
+    let p=s.i;n[holder].forEach(b=>{p.connect(b);p=b});p.connect(s.o);
+    A[holder+'Sig']=sig;
+  }
+  list.forEach((f,i)=>setBq(n[holder][i],f));
+}
+function toneList(){const a=clamp(S.fx.tone.amt,0,200)/100;return (TONES[S.tone]||[]).map(([t,f,g,q])=>({t,f,g:g*a,q}))}
+function driveCurve(a){const k=1+a/100*30,N=4096,cv=new Float32Array(N),d=Math.tanh(k);for(let i=0;i<N;i++){const x=i/(N-1)*2-1;cv[i]=Math.tanh(k*x)/d}return cv}
+function crushCurve(a){const bits=12-a/100*8,L=Math.pow(2,bits),N=8193,cv=new Float32Array(N);for(let i=0;i<N;i++){const x=i/(N-1)*2-1;cv[i]=Math.round(x*L)/L}return cv}
+function makeIR(dec){const c=A.ctx,sr=c.sampleRate,len=Math.floor(sr*clamp(dec,.2,8)),b=c.createBuffer(2,len,sr);
+  for(let ch=0;ch<2;ch++){const d=b.getChannelData(ch);let lp=0;for(let i=0;i<len;i++){const w=Math.random()*2-1;lp+=(w-lp)*(.25+.75*(1-i/len));d[i]=lp*Math.exp(-6.9*i/len)}}return b}
+let irT;
+function applyAudio(){
+  if(!A.ctx||!A.n)return;
+  const c=A.ctx,n=A.n,t=c.currentTime,f=S.fx,sm=(p,v)=>p.setTargetAtTime(v,t,.015);
+  sm(n.trim.gain,dB(clamp(S.preamp,-30,40)));
+  sm(n.mas.gain,S.gain);
+  sm(n.mon.gain,A.muted?0:S.mon*S.mon);
+  n.hp.frequency.value=f.ncut.hp;n.lp.frequency.value=f.ncut.lp;n.hp.Q.value=-3;n.lp.Q.value=-3;
+  n.gDly.delayTime.value=f.gate.on?.012:0;
+  const cp=n.comp;cp.threshold.value=f.comp.thr;cp.ratio.value=f.comp.ratio;cp.attack.value=f.comp.att/1000;cp.release.value=f.comp.rel/1000;n.mk.gain.value=dB(f.comp.mk);
+  if(A.curve.d!==f.drive.amt){n.drv.curve=driveCurve(f.drive.amt);A.curve.d=f.drive.amt}
+  if(A.curve.c!==f.crush.amt){n.cr.curve=crushCurve(f.crush.amt);A.curve.c=f.crush.amt}
+  const ms=f.haas.ms;n.hdL.delayTime.value=ms<0?-ms/1000:0;n.hdR.delayTime.value=ms>0?ms/1000:0;
+  n.wS.gain.value=f.wider.w/100;n.pan.pan.value=f.pan.pan/100;
+  n.eDl.delayTime.value=f.echo.t/1000;n.eFb.gain.value=f.echo.fb/100;n.eW.gain.value=f.echo.mix/100;
+  const r=f.reverb;n.rPre.delayTime.value=r.pre/1000;n.rHP.frequency.value=r.lc;n.rLP.frequency.value=r.damp;n.rWet.gain.value=r.mix/100*1.2;n.rDry.gain.value=1-r.mix/200;
+  if(A.irSig!==String(r.dec)){A.irSig=String(r.dec);clearTimeout(irT);irT=setTimeout(()=>{if(A.ctx)n.rConv.buffer=makeIR(r.dec)},n.rConv.buffer?160:0)}
+  syncFilters('eq','eq',S.eq.filter(x=>x.on),'eqF');
+  syncFilters('tone',S.tone,toneList(),'toneF');
+  const sig=ORDER.map(k=>+isActive(k)).join('');if(sig!==A.sig){A.sig=sig;rewire()}
+  drawEQ();
+}
+/* gate: envelope follower on raw input, with 12 ms look-ahead delay */
+const gbuf=new Float32Array(1024);let gOpen=false,gHold=0,calib=null;
+setInterval(()=>{
+  if(!A.ctx||!A.n)return;const n=A.n;n.inAn.getFloatTimeDomainData(gbuf);
+  let s=0;for(let i=0;i<1024;i++)s+=gbuf[i]*gbuf[i];const db=toDb(Math.sqrt(s/1024)),now=performance.now();
+  if(calib){calib.v.push(db);return}
+  const g=S.fx.gate;if(!g.on)return;
+  if(db>g.thr){gOpen=true;gHold=now+90}else if(gOpen&&db<g.thr-3&&now>gHold)gOpen=false;
+  n.gG.gain.setTargetAtTime(gOpen?1:dB(g.floor),A.ctx.currentTime,gOpen?.004:Math.max(.005,g.rel/3000));
+},8);
+function calibrate(){
+  if(!A.ctx){toast('Bấm BẮT ĐẦU trước, rồi giữ im lặng.');return}
+  calib={v:[]};const b=$('#calib');b.textContent='ĐANG ĐO… IM LẶNG 1.5s';
+  setTimeout(()=>{const v=calib.v.filter(isFinite);calib=null;b.textContent='ĐO NỀN ỒN TỰ ĐỘNG';
+    if(!v.length)return;const avg=v.reduce((a,b)=>a+b,0)/v.length;
+    S.fx.gate.thr=clamp(Math.round(avg+8),-80,0);S.fx.gate.on=true;syncUI();applyAudio();toast(`Nền ồn ${avg.toFixed(0)} dB, ngưỡng gate đặt ${S.fx.gate.thr} dB.`)},1500);
+}
+
+/* start / stop */
+let recorder=null,recChunks=[];
+async function start(){
+  if(!$('#hp').checked){setTab('mic');$('#safe').classList.remove('flash');void $('#safe').offsetWidth;$('#safe').classList.add('flash');toast('Xác nhận đang đeo tai nghe có dây trước khi bắt đầu.');return}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast('Trình duyệt chặn micro. Mở trang bằng https:// hoặc localhost.');return}
+  try{
+    const dev=$('#dev').value;
+    A.stream=await navigator.mediaDevices.getUserMedia({audio:{deviceId:dev?{exact:dev}:undefined,echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:{ideal:2}}});
+  }catch(e){toast('Không mở được micro: '+(e.name==='NotAllowedError'?'bạn chưa cấp quyền.':e.message));return}
+  A.ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});await A.ctx.resume();
+  A.muted=false;build();
+  A.n.rConv.buffer=makeIR(S.fx.reverb.dec);
+  setLive(true);listDevices();
+}
+function stop(){
+  if(recorder&&recorder.state!=='inactive')recorder.stop();
+  if(A.stream)A.stream.getTracks().forEach(t=>t.stop());
+  if(A.ctx)A.ctx.close();A.ctx=null;A.n=null;A.stream=null;setLive(false);
+}
+async function listDevices(){
+  try{const d=(await navigator.mediaDevices.enumerateDevices()).filter(x=>x.kind==='audioinput');
+    const cur=A.stream.getAudioTracks()[0].getSettings().deviceId,s=$('#dev');s.innerHTML='';
+    d.forEach((x,i)=>s.append(h('option',{value:x.deviceId},x.label||('Micro '+(i+1)))));s.value=cur;$('#devbox').hidden=false}catch(e){}
+}
+function setLive(on){
+  $('#go').textContent=on?'DỪNG':'BẮT ĐẦU';$('#go').classList.toggle('on',on);
+  const p=$('#stat');p.textContent=on?'● LIVE':'OFFLINE';p.classList.toggle('live',on);
+}
+/* record */
+function toggleRec(){
+  if(!A.ctx){toast('Bắt đầu mic trước khi ghi.');return}
+  if(recorder&&recorder.state==='recording'){recorder.stop();return}
+  recChunks=[];let mt='';for(const m of['audio/webm;codecs=opus','audio/webm','audio/mp4'])if(window.MediaRecorder&&MediaRecorder.isTypeSupported(m)){mt=m;break}
+  recorder=new MediaRecorder(A.n.rec.stream,mt?{mimeType:mt}:{});
+  recorder.ondataavailable=e=>e.data.size&&recChunks.push(e.data);
+  recorder.onstop=()=>{const b=new Blob(recChunks,{type:recorder.mimeType||'audio/webm'}),u=URL.createObjectURL(b),ext=(recorder.mimeType||'').includes('mp4')?'m4a':'webm';
+    $('#recbox').hidden=false;$('#reclist').prepend(h('div',{},h('audio',{controls:'',src:u,style:'width:100%'}),h('a',{class:'dl',href:u,download:`mic-${Date.now()}.${ext}`},'Tải xuống bản ghi')));
+    $('#rec').setAttribute('aria-pressed','false');$('#rec').textContent='REC'};
+  recorder.start();$('#rec').setAttribute('aria-pressed','true');$('#rec').textContent='STOP';
+}
+
+/* meters, LED, protection loop */
+const mb=new Float32Array(1024);let satT=0,lastT=performance.now(),hue=0,guardOn=true;
+const peak=an=>{an.getFloatTimeDomainData(mb);let p=0;for(let i=0;i<1024;i++){const a=Math.abs(mb[i]);if(a>p)p=a}return p};
+const holdv={mi:0,mo:0};
+function frame(now){
+  requestAnimationFrame(frame);const dt=(now-lastT)/1000;lastT=now;
+  let pi=0,po=0;
+  if(A.n){pi=peak(A.n.inAn);po=peak(A.n.outAn)}
+  for(const[id,p]of[['mi',pi],['mo',po]]){
+    holdv[id]=Math.max(p,holdv[id]-dt*1.2);const db=toDb(holdv[id]),w=clamp((db+60)/60,0,1);
+    $('#'+id).style.width=(w*100)+'%';$('#'+id).style.setProperty('--bw',(100/Math.max(w,.01))+'%');
+    $('#'+id+'t').textContent=holdv[id]<1e-4?'-∞':db.toFixed(0)+' dB';
+  }
+  if(A.n&&guardOn&&!A.muted){satT=po>.95?satT+dt:Math.max(0,satT-dt*2);
+    if(satT>3.5){satT=0;A.muted=true;applyAudio();syncMute();toast('Đã tắt monitor: tín hiệu bão hòa liên tục (nghi hú hoặc gain quá cao). Giảm gain rồi bấm MUTE để mở lại.')}}
+  // LED
+  const ring=$('#ledring'),dot=$('#tdot'),live=!!A.n;let col='#ff2d41',g=4,op=1;
+  if(S.led==='rgb'){hue=(hue+dt*70)%360;col=`hsl(${hue} 100% 58%)`;g=8}
+  else if(S.led==='pulse'){g=3+po*22;col='#ff2d41'}
+  else if(S.led==='off'){op=0}
+  if(A.muted&&live){op=.35+.65*(Math.sin(now/220)>0?1:0);col='#ff2d41'}
+  ring.style.stroke=col;ring.style.opacity=op;ring.style.setProperty('--c',col);ring.style.setProperty('--g',g+'px');
+  dot.style.fill=live&&!A.muted?'#ff2d41':'#2a2a31';dot.style.setProperty('--c','#ff2d41');dot.style.setProperty('--g',live&&!A.muted?'6px':'0px');
+}
+function syncMute(){$('#mute').setAttribute('aria-pressed',A.muted)}
+function toggleMute(){if(!A.ctx){toast('Bắt đầu mic trước.');return}A.muted=!A.muted;satT=0;applyAudio();syncMute()}
+
+/* ================= UI ================= */
+function setTab(t){$$('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));['mic','pre','fx','eq'].forEach(x=>$('#t-'+x).hidden=x!==t);if(t==='eq')requestAnimationFrame(drawEQ);scrollTo({top:0})}
+$('#tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(b)setTab(b.dataset.tab)});
+const fmtG=x=>x<10?x.toFixed(2):x.toFixed(1);
+function setRange(el){el.style.setProperty('--v',((el.value-el.min)/(el.max-el.min)*100)+'%')}
+function syncGain(){
+  const p=gainToPos(S.gain);$('#gain').value=p;setRange($('#gain'));$('#gv').textContent=fmtG(S.gain);
+  $('#gdb').textContent=(S.gain>0?toDb(S.gain).toFixed(1):'-∞')+' dB';$('#kn').setAttribute('transform',`rotate(${-135+p/1000*270} 110 312)`);
+  $$('#gchips .chip').forEach(c=>c.setAttribute('aria-pressed',Math.abs(+c.dataset.v-S.gain)<.05));
+}
+function buildStatic(){
+  [1,5,10,25,50,100,150].forEach(v=>$('#gchips').append(h('button',{class:'chip','data-v':v,'aria-pressed':'false',onclick:()=>{S.gain=v;syncGain();applyAudio()}},v+'×')));
+  [['rgb','RGB'],['red','Đỏ'],['pulse','Theo giọng'],['off','Tắt']].forEach(([k,l])=>$('#leds').append(h('button',{class:'chip','data-k':k,'aria-pressed':k===S.led,onclick:()=>{S.led=k;$$('#leds .chip').forEach(c=>c.setAttribute('aria-pressed',c.dataset.k===k))}},l)));
+  Object.entries(FX).forEach(([k,d])=>$('#quick').append(h('button',{class:'chip','data-q':k,'aria-pressed':'false',onclick:()=>toggleFx(k)},d.n.split(' /')[0])));
+  const card=p=>{const tg=[];if(p.pre)tg.push(h('span',{class:'tag'+(p.pre>=40?' r':'')},'preamp '+Math.min(p.pre,40)+' dB'));if(p.gain!=null&&p.hook)tg.push(h('span',{class:'tag'+(p.loud?' r':'')},p.gain+'×'));
+    if(p.eq&&p.eq.length)tg.push(h('span',{class:'tag'},p.eq.length+' EQ'));if(p.tone)tg.push(h('span',{class:'tag'},TONE_LABEL[p.tone]));
+    Object.keys(p.fx||{}).forEach(k=>tg.push(h('span',{class:'tag'},k)));
+    return h('button',{class:'pre','data-id':p.id,'aria-pressed':'false',onclick:()=>{applyPreset(p);toast('Đã áp dụng: '+p.name)}},h('b',{},p.name),h('p',{},p.note),h('div',{class:'tags'},tg))};
+  APO.forEach(p=>$('#g-apo').append(card(p)));HOOKS.forEach(p=>$('#g-hook').append(card(p)));
+  // fx cards
+  Object.entries(FX).forEach(([k,d])=>{
+    const body=h('div',{class:'stack',style:'gap:8px'});
+    if(k==='tone'){const t=h('div',{class:'tone'});Object.keys(TONES).forEach(m=>t.append(h('button',{class:'chip','data-t':m,'aria-pressed':'false',onclick:()=>{S.tone=m;S.fx.tone.on=m!=='off';syncUI();applyAudio()}},TONE_LABEL[m])));body.append(t)}
+    for(const[p,a]of Object.entries(d.p)){
+      const o=h('output',{id:`o-${k}-${p}`}),r=h('input',{type:'range',id:`r-${k}-${p}`,min:a[1],max:a[2],step:a[3],'aria-label':d.n+' '+a[0]});
+      r.addEventListener('input',()=>{S.fx[k][p]=+r.value;if(k==='tone'||!S.fx[k].on&&k!=='tone'){}S.preset=null;setRange(r);o.textContent=fv(k,p);applyAudio()});
+      body.append(h('div',{class:'ctl'},h('span',{},a[0]),r,o));
+    }
+    if(k==='gate')body.append(h('button',{class:'btn',id:'calib',onclick:calibrate},'ĐO NỀN ỒN TỰ ĐỘNG'));
+    const sw=h('button',{class:'sw',id:'sw-'+k,'aria-pressed':'false','aria-label':'Bật '+d.n,onclick:()=>toggleFx(k)});
+    $('#fxlist').append(h('div',{class:'card off',id:'fx-'+k},h('div',{class:'fxh'},sw,h('div',{},h('b',{},d.n),h('span',{},d.s))),body));
+  });
+}
+const fv=(k,p)=>{const a=FX[k].p[p],v=S.fx[k][p];return (Number.isInteger(a[3])?Math.round(v):(+v).toFixed(a[3]<.1?2:1))+a[4]};
+function toggleFx(k){
+  if(k==='tone'){S.fx.tone.on=!S.fx.tone.on;if(S.fx.tone.on&&S.tone==='off')S.tone='nice';if(!S.fx.tone.on)S.tone='off'}
+  else S.fx[k].on=!S.fx[k].on;
+  S.preset=null;syncUI();applyAudio();
+}
+function syncUI(){
+  syncGain();$('#mon').value=S.mon*100;setRange($('#mon'));$('#monv').textContent=Math.round(S.mon*100)+'%';
+  $$('.pre').forEach(b=>b.setAttribute('aria-pressed',b.dataset.id===S.preset));
+  for(const[k,d]of Object.entries(FX)){
+    const on=k==='tone'?(S.fx.tone.on&&S.tone!=='off'):S.fx[k].on;
+    $('#sw-'+k).setAttribute('aria-pressed',on);$('#fx-'+k).classList.toggle('off',!on);
+    $$(`#quick [data-q="${k}"]`).forEach(b=>b.setAttribute('aria-pressed',on));
+    for(const p of Object.keys(d.p)){const r=$(`#r-${k}-${p}`);r.value=S.fx[k][p];setRange(r);$(`#o-${k}-${p}`).textContent=fv(k,p)}
+  }
+  $$('#fx-tone .tone .chip').forEach(c=>c.setAttribute('aria-pressed',c.dataset.t===S.tone));
+  $('#pre').value=clamp(S.preamp,-30,40);setRange($('#pre'));$('#prev').textContent=S.preamp+' dB'+(S.preamp>40?' → 40':'');
+  renderFilters();drawEQ();
+}
+/* gain controls */
+$('#gain').addEventListener('input',e=>{S.gain=+posToGain(+e.target.value).toFixed(2);syncGain();applyAudio()});
+(()=>{const k=$('#knob');let y0=0,p0=0,on=false;
+  k.addEventListener('pointerdown',e=>{on=true;y0=e.clientY;p0=gainToPos(S.gain);k.setPointerCapture(e.pointerId)});
+  k.addEventListener('pointermove',e=>{if(!on)return;const p=clamp(p0+(y0-e.clientY)*5,0,1000);S.gain=+posToGain(p).toFixed(2);syncGain();applyAudio()});
+  k.addEventListener('pointerup',()=>on=false);k.addEventListener('pointercancel',()=>on=false)})();
+$('#touch').addEventListener('click',toggleMute);
+$('#mon').addEventListener('input',e=>{S.mon=e.target.value/100;setRange(e.target);$('#monv').textContent=e.target.value+'%';applyAudio()});
+$('#pre').addEventListener('input',e=>{S.preamp=+e.target.value;S.preset=null;setRange(e.target);$('#prev').textContent=S.preamp+' dB';applyAudio()});
+$('#go').addEventListener('click',()=>A.ctx?stop():start());
+$('#mute').addEventListener('click',toggleMute);$('#rec').addEventListener('click',toggleRec);
+$('#dev').addEventListener('change',async()=>{if(A.ctx){stop();await start()}});
+
+/* ================= EQ list + graph ================= */
+const TYPES=['PK','LS','HS','LP','HP','BP','NO','AP'];
+function renderFilters(){
+  const box=$('#flts');box.innerHTML='';
+  if(!S.eq.length)box.append(h('p',{class:'note',style:'margin:0'},'Chưa có filter. Thêm mới hoặc chọn preset / nhập config APO.'));
+  S.eq.forEach((f,i)=>{
+    const upd=(k,v)=>{f[k]=v;S.preset=null;applyAudio()};
+    const num=(k,st)=>h('input',{type:'number',step:st,value:f[k],'aria-label':k,onchange:e=>upd(k,parseFloat(e.target.value)||0)});
+    const sel=h('select',{onchange:e=>{upd('t',e.target.value);renderFilters()}},TYPES.map(t=>h('option',{value:t,...(t===f.t?{selected:''}:{})},t)));
+    const hasG=f.t==='PK'||f.t==='LS'||f.t==='HS';
+    const tg=h('button',{class:'chip','aria-pressed':f.on,style:'padding:7px 0',onclick:e=>{f.on=!f.on;e.currentTarget.setAttribute('aria-pressed',f.on);applyAudio()}},f.on?'ON':'OFF');
+    const gi=num('g',.1);if(!hasG){gi.disabled=true;gi.style.opacity=.35}
+    box.append(h('div',{class:'flt'},tg,sel,num('f',1),gi,num('q',.01),h('button',{class:'x',onclick:()=>{S.eq.splice(i,1);renderFilters();applyAudio()},'aria-label':'Xóa'},'×')));
+  });
+  if(S.eq.length)box.prepend(h('div',{class:'flt note',style:'margin:0 0 -2px;font:10px var(--mono)'},h('span'),h('span',{},'loại'),h('span',{},'Fc Hz'),h('span',{},'gain dB'),h('span',{},'Q'),h('span')));
+}
+$('#addf').onclick=()=>{S.eq.push(F('PK',1000,0,1));renderFilters();applyAudio()};
+$('#clrf').onclick=()=>{S.eq=[];renderFilters();applyAudio()};
+function coef(t,f,g,q,fs){
+  const w=2*Math.PI*f/fs,c=Math.cos(w),s=Math.sin(w),a=Math.pow(10,g/40),al=s/(2*q),sq=2*Math.sqrt(a)*(s/2)*Math.SQRT2;let b0,b1,b2,a0,a1,a2;
+  switch(t){
+   case'PK':b0=1+al*a;b1=-2*c;b2=1-al*a;a0=1+al/a;a1=-2*c;a2=1-al/a;break;
+   case'LP':b0=(1-c)/2;b1=1-c;b2=b0;a0=1+al;a1=-2*c;a2=1-al;break;
+   case'HP':b0=(1+c)/2;b1=-(1+c);b2=b0;a0=1+al;a1=-2*c;a2=1-al;break;
+   case'BP':b0=al;b1=0;b2=-al;a0=1+al;a1=-2*c;a2=1-al;break;
+   case'NO':b0=1;b1=-2*c;b2=1;a0=1+al;a1=-2*c;a2=1-al;break;
+   case'AP':b0=1-al;b1=-2*c;b2=1+al;a0=1+al;a1=-2*c;a2=1-al;break;
+   case'LS':b0=a*((a+1)-(a-1)*c+sq);b1=2*a*((a-1)-(a+1)*c);b2=a*((a+1)-(a-1)*c-sq);a0=(a+1)+(a-1)*c+sq;a1=-2*((a-1)+(a+1)*c);a2=(a+1)+(a-1)*c-sq;break;
+   case'HS':b0=a*((a+1)+(a-1)*c+sq);b1=-2*a*((a-1)+(a+1)*c);b2=a*((a+1)+(a-1)*c-sq);a0=(a+1)-(a-1)*c+sq;a1=2*((a-1)-(a+1)*c);a2=(a+1)-(a-1)*c-sq;break;
+   default:return[1,0,0,1,0,0]}
+  return[b0,b1,b2,a0,a1,a2];
+}
+function magDb(cf,w){const[b0,b1,b2,a0,a1,a2]=cf,c1=Math.cos(w),s1=Math.sin(w),c2=Math.cos(2*w),s2=Math.sin(2*w);
+  const nr=b0+b1*c1+b2*c2,ni=-(b1*s1+b2*s2),dr=a0+a1*c1+a2*c2,di=-(a1*s1+a2*s2);return 10*Math.log10((nr*nr+ni*ni)/(dr*dr+di*di)+1e-30)}
+function drawEQ(){
+  const cv=$('#eqc');if(!cv||cv.offsetParent===null)return;const x=cv.getContext('2d'),W=cv.width,H=cv.height,fs=A.ctx?A.ctx.sampleRate:48000;
+  const list=[...S.eq.filter(f=>f.on),...(S.fx.tone.on?toneList():[])].map(f=>coef(f.t,clamp(f.f,10,fs/2-100),(f.t==='PK'||f.t==='LS'||f.t==='HS')?clamp(f.g,-30,30):0,Math.max(.05,f.q||.707),fs));
+  const N=360,fr=[],db=[];let mx=6;
+  for(let i=0;i<N;i++){const f=20*Math.pow(1000,i/(N-1));fr.push(f);let d=0;for(const cf of list)d+=magDb(cf,2*Math.PI*f/fs);db.push(d);mx=Math.max(mx,Math.abs(d))}
+  mx=Math.min(30,Math.ceil(mx/6)*6);const cs=getComputedStyle(document.documentElement);
+  x.clearRect(0,0,W,H);x.font='20px IBM Plex Mono,monospace';x.lineWidth=1;
+  const px=f=>Math.log(f/20)/Math.log(1000)*(W-70)+50,py=d=>H/2-clamp(d,-mx,mx)/mx*(H/2-18);
+  x.strokeStyle='#23232a';x.fillStyle='#6b6b74';
+  for(let d=-mx;d<=mx;d+=mx/2){x.beginPath();x.moveTo(50,py(d));x.lineTo(W-20,py(d));x.stroke();x.fillText(d>0?'+'+d:''+d,4,py(d)+6)}
+  [50,100,200,500,1000,2000,5000,10000,20000].forEach(f=>{x.beginPath();x.moveTo(px(f),10);x.lineTo(px(f),H-24);x.stroke();x.fillText(f>=1000?(f/1000)+'k':f,px(f)-12,H-4)});
+  x.strokeStyle='#3a3a43';x.beginPath();x.moveTo(50,py(0));x.lineTo(W-20,py(0));x.stroke();
+  x.beginPath();fr.forEach((f,i)=>i?x.lineTo(px(f),py(db[i])):x.moveTo(px(f),py(db[i])));
+  x.lineTo(px(20000),py(0));x.lineTo(px(20),py(0));x.closePath();x.fillStyle='#ff2d4122';x.fill();
+  x.beginPath();fr.forEach((f,i)=>i?x.lineTo(px(f),py(db[i])):x.moveTo(px(f),py(db[i])));x.strokeStyle='#ff2d41';x.lineWidth=3;x.stroke();
+}
+/* ================= APO import / export ================= */
+const CANON={LSC:'LS',LSQ:'LS',LS:'LS',HSC:'HS',HSQ:'HS',HS:'HS',LPQ:'LP',LP:'LP',HPQ:'HP',HP:'HP',PK:'PK',PEQ:'PK',BP:'BP',NO:'NO',AP:'AP'};
+function basiName(l){const m=l.match(/ChunkData\s+"([^"]+)"/);if(!m)return'';try{const b=atob(m[1]);let s='';for(let i=8;i<b.length&&b.charCodeAt(i)!==0;i++)s+=b[i];return s.toLowerCase()}catch(e){return''}}
+function parseAPO(txt){
+  const o={pre:0,eq:[],fx:{},tone:null,un:[],ch:0},num=(l,k)=>{const m=l.match(new RegExp('(?:^|\\s)"?'+k+'"?\\s+(-?[\\d.]+(?:e-?\\d+)?)','i'));return m?parseFloat(m[1]):null};
+  const on=(k,v={})=>{o.fx[k]=Object.assign(o.fx[k]||{},v)};
+  txt.split(/\r?\n/).forEach(raw=>{
+    const l=raw.trim();if(!l||l[0]==='#')return;let m;
+    if(m=l.match(/^Preamp:\s*(-?[\d.]+)\s*dB/i)){o.pre+=parseFloat(m[1]);return}
+    if(m=l.match(/^Filter(?:\s*\d+)?:\s*(ON|OFF)\s+(\w+)(.*)$/i)){
+      if(m[1].toUpperCase()!=='ON')return;const t=CANON[m[2].toUpperCase()];if(!t){o.un.push(l.slice(0,60));return}
+      const fc=num(m[3],'Fc'),g=num(m[3],'Gain'),q=num(m[3],'Q');if(fc==null){o.un.push(l.slice(0,60));return}
+      o.eq.push({t,f:fc,g:g||0,q:q??(t==='PK'?1:.707),on:true});return}
+    if(m=l.match(/^Channel:\s*(.+)/i)){if(!/all/i.test(m[1]))o.ch=1;return}
+    if(m=l.match(/^Delay:\s*(-?[\d.]+)\s*(ms|samples)?/i)){const v=parseFloat(m[1]);on('haas',{ms:clamp(/ms/i.test(m[2]||'')?v:v/48,-40,40)});return}
+    if(/^Device:/i.test(l))return;
+    if(/^Include:/i.test(l)){o.un.push(l);return}
+    if(/^GraphicEQ:/i.test(l)){o.un.push('GraphicEQ (chưa hỗ trợ)');return}
+    if(m=l.match(/^VSTPlugin:\s*Library\s+(?:"([^"]+)"|(\S+))/i)){
+      const name=(m[1]||m[2]).replace(/\.dll$/i,'').toLowerCase();
+      if(name.includes('basiq')){const b=basiName(l);let t=null;for(const k of['crystal','nice','open','bass','kick','sweet','default'])if(b.includes(k)){t=k;break}
+        if(t){o.tone=(o.tone==='crystal'&&t==='nice')||(o.tone==='nice'&&t==='crystal')?'nice+crystal':t}else o.un.push('basiQ: '+(b.replace(/[^\w .]/g,'')||'preset lạ')+' (bỏ qua)')}
+      else if(name.includes('atkexpander')){const th=num(l,'Threshold'),sl=num(l,'Slope');on('gate',{...(th!=null?{thr:+(-60+th*60).toFixed(1)}:{}),...(sl!=null?{floor:+(-60*sl).toFixed(0)}:{})})}
+      else if(name.includes('ggate')){const th=num(l,'Thresh');on('gate',th!=null?{thr:+(-60+th*60).toFixed(1)}:{})}
+      else if(name.includes('rnnoise'))on('ncut');
+      else if(name.includes('quickhaas'))on('haas',{ms:19});
+      else if(name==='wider')on('wider');
+      else if(/blackhole|dreverb|reverbsolo|crtiv|tal-reverb|reverb/.test(name))on('reverb');
+      else if(/vocal_king|reacomp/.test(name))on('comp');
+      else if(name.includes('gdelay'))on('echo');
+      else if(/psypan/.test(name)){const p=num(l,'pan');on('pan',p!=null?{pan:Math.round((p-.5)*200)}:{})}
+      else o.un.push(name+'.dll (không chạy được trên web)');
+    }
+  });
+  return o;
+}
+function importAPO(txt){
+  const r=parseAPO(txt);
+  applyPreset({id:null,pre:r.pre,eq:r.eq,tone:r.tone||'off',fx:r.fx,gain:S.gain});
+  const parts=[`Đã nhập: preamp ${r.pre} dB, ${r.eq.length} filter, ${Object.keys(r.fx).length+(r.tone?1:0)} hiệu ứng.`];
+  if(r.ch)parts.push('Có dòng Channel L/R: web áp dụng cho cả hai kênh.');
+  const out=$('#impout');out.textContent='';out.append(parts.join(' '));
+  if(r.un.length)out.append(h('div',{style:'margin-top:6px'},'Bỏ qua: '+[...new Set(r.un)].join(' · ')));
+}
+$('#imp').onclick=()=>importAPO($('#apo').value);
+$('#pick').onclick=()=>$('#file').click();
+$('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;const t=await f.text();$('#apo').value=t;importAPO(t);e.target.value=''};
+$('#exp').onclick=()=>{
+  const L=['# Xuất từ Studio Mic Sim'];if(S.preamp)L.push(`Preamp: ${S.preamp} dB`);
+  S.eq.forEach((f,i)=>L.push(`Filter ${i+1}: ${f.on?'ON':'OFF'} ${f.t} Fc ${f.f} Hz`+((f.t==='PK'||f.t==='LS'||f.t==='HS')?` Gain ${f.g} dB`:'')+` Q ${f.q}`));
+  if(S.tone!=='off')L.push(`# Tone: ${TONE_LABEL[S.tone]} ${S.fx.tone.amt}%`);
+  for(const[k,d]of Object.entries(FX)){if(k==='tone'||!S.fx[k].on)continue;L.push(`# FX ${d.n}: `+Object.keys(d.p).map(p=>`${p}=${S.fx[k][p]}`).join(' '))}
+  L.push(`# Gain: ${S.gain}x`);$('#apo').value=L.join('\n');$('#impout').textContent='Đã tạo config ở trên. Dòng # là phần web mô phỏng, APO sẽ bỏ qua.';
+};
+
+/* init */
+buildStatic();syncUI();requestAnimationFrame(frame);
+window.__sim={S,A,parseAPO,APO,HOOKS,applyPreset,importAPO};
+</script>
+</body>
+</html>

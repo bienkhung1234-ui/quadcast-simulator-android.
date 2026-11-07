@@ -1,0 +1,68 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "QuadCastSimulatorAndroid_v0.3_source.zip"
+      - ".github/workflows/android-apk.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Prepare Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "QuadCastSimulatorAndroid_v0.3_source.zip" ]]; then
+            mkdir -p build-source
+            unzip -q "QuadCastSimulatorAndroid_v0.3_source.zip" -d build-source
+            PROJECT_DIR="$(find build-source -name settings.gradle -type f -printf '%h\n' | head -n 1)"
+          elif [[ -f "settings.gradle" && -f "app/build.gradle" ]]; then
+            PROJECT_DIR="."
+          else
+            echo "::error::Source ZIP or Android project files were not found."
+            exit 1
+          fi
+          if [[ -z "${PROJECT_DIR}" || ! -f "${PROJECT_DIR}/app/build.gradle" ]]; then
+            echo "::error::Could not locate the Android app module."
+            exit 1
+          fi
+          echo "PROJECT_DIR=${PROJECT_DIR}" >> "$GITHUB_ENV"
+
+      - name: Build debug APK
+        run: gradle -p "$PROJECT_DIR" --no-daemon --stacktrace assembleDebug
+
+      - name: Publish APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuadCastSimulator-debug-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+          
